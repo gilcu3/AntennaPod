@@ -74,6 +74,16 @@ public class MediaDownloadedHandler implements Runnable {
         } catch (Exception e) {
             Log.e(TAG, "Get duration failed", e);
         }
+        boolean patchedMedia = false;
+        if(!media.isInProgress()){
+            media.onPlaybackStart();
+            int minPlayback = 6000;
+            media.setLastPlayedTime(System.currentTimeMillis());
+            media.setPosition(minPlayback);
+            media.setPlayedDuration(media.getPlayedDurationWhenStarted() + media.getPosition() - media.getStartPosition());
+            DBWriter.setFeedMediaPlaybackInformation(media);
+            patchedMedia = true;
+        }
 
         final FeedItem item = media.getItem();
 
@@ -104,6 +114,17 @@ public class MediaDownloadedHandler implements Runnable {
                     .currentTimestamp()
                     .build();
             SynchronizationQueueSink.enqueueEpisodeActionIfSynchronizationIsActive(context, action);
+
+            if(patchedMedia){
+                DBWriter.markItemPlayed(FeedItem.UNPLAYED, item.getId());
+                EpisodeAction action2 = new EpisodeAction.Builder(item, EpisodeAction.PLAY)
+                        .currentTimestamp()
+                        .started(item.getMedia().getStartPosition() / 1000)
+                        .position(item.getMedia().getPosition() / 1000)
+                        .total(item.getMedia().getDuration() / 1000)
+                        .build();
+                SynchronizationQueueSink.enqueueEpisodeActionIfSynchronizationIsActive(context, action2);
+            }
         }
     }
 
